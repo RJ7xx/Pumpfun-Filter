@@ -9,12 +9,6 @@ const inter = Inter({
   variable: "--font-inter",
 })
 
-export const metadata: Metadata = {
-  title: "Token Explorer",
-  description: "Explore pump.fun tokens with advanced filtering",
-  generator: "v0.app",
-}
-
 export default function RootLayout({
   children,
 }: Readonly<{
