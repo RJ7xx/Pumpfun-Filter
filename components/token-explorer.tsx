@@ -45,7 +45,8 @@ export function TokenExplorer() {
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
   const [hasMore, setHasMore] = useState(true)
   const [offset, setOffset] = useState(0)
-  const observerRef = useRef<IntersectionObserver | null>(null)
+  const [totalCount, setTotalCount] = useState<number>(0)
+  const observerRef = useRef<HTMLDivElement>(null)
 
   const ITEMS_PER_PAGE = 30
 
@@ -122,6 +123,23 @@ export function TokenExplorer() {
       const minAthMarketCapNum = minAthMarketCap ? Number(minAthMarketCap) : 0
       const needsAthFiltering = minAthMarketCapNum > 0
 
+      if (!isLoadMore && !needsAthFiltering) {
+        let countQuery = supabase.from("tokens").select("*", { count: "exact", head: true })
+
+        if (startDate) {
+          const startTimestamp = Math.floor(startDate.getTime() / 1000)
+          countQuery = countQuery.gte("createdAt", startTimestamp)
+        }
+
+        if (endDate) {
+          const endTimestamp = Math.floor((endDate.getTime() + 86400000) / 1000)
+          countQuery = countQuery.lt("createdAt", endTimestamp)
+        }
+
+        const { count } = await countQuery
+        setTotalCount(count || 0)
+      }
+
       let query = supabase.from("tokens").select("mint, name, symbol, createdAt")
 
       if (startDate) {
@@ -136,8 +154,9 @@ export function TokenExplorer() {
 
       query = query.order("createdAt", { ascending: sortOrder === "oldest" })
 
+      const fetchSize = needsAthFiltering ? ITEMS_PER_PAGE * 3 : ITEMS_PER_PAGE
       const from = currentOffset
-      const to = from + ITEMS_PER_PAGE - 1
+      const to = from + fetchSize - 1
       query = query.range(from, to)
 
       const { data, error } = await query
@@ -177,6 +196,33 @@ export function TokenExplorer() {
         }
 
         filteredTokens = tokensWithAth
+
+        if (!isLoadMore) {
+          // For initial load with ATH filtering, we need to estimate total count
+          // This is a rough estimate based on the filtering ratio
+          const filterRatio = filteredTokens.length / processedTokens.length
+          let estimatedTotal = 0
+
+          if (filterRatio > 0) {
+            // Get total count without ATH filter first
+            let countQuery = supabase.from("tokens").select("*", { count: "exact", head: true })
+
+            if (startDate) {
+              const startTimestamp = Math.floor(startDate.getTime() / 1000)
+              countQuery = countQuery.gte("createdAt", startTimestamp)
+            }
+
+            if (endDate) {
+              const endTimestamp = Math.floor((endDate.getTime() + 86400000) / 1000)
+              countQuery = countQuery.lt("createdAt", endTimestamp)
+            }
+
+            const { count } = await countQuery
+            estimatedTotal = Math.round((count || 0) * filterRatio)
+          }
+
+          setTotalCount(estimatedTotal)
+        }
       }
 
       if (isLoadMore) {
@@ -186,7 +232,7 @@ export function TokenExplorer() {
       }
 
       setOffset(currentOffset + data.length)
-      setHasMore(data.length === ITEMS_PER_PAGE)
+      setHasMore(data.length === fetchSize)
     } catch (error) {
       console.error("Error:", error)
     } finally {
@@ -341,7 +387,7 @@ export function TokenExplorer() {
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold font-sans">Tokens</h2>
           <Badge variant="secondary" className="text-sm px-3 py-1 font-sans">
-            {tokens.length.toLocaleString()} results
+            {totalCount.toLocaleString()} results
           </Badge>
         </div>
 
@@ -486,3 +532,4 @@ export function TokenExplorer() {
     </div>
   )
 }
+
