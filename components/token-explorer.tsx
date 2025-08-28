@@ -22,6 +22,7 @@ interface Token {
   image_uri?: string
   usd_market_cap?: number
   ath_market_cap?: number
+  description?: string // Added description field
   isHovered?: boolean
   isLoadingHoverData?: boolean
 }
@@ -29,6 +30,7 @@ interface Token {
 interface PumpData {
   image_uri: string
   usd_market_cap: number
+  description: string // Added description field
 }
 
 interface SolanaTrackerData {
@@ -100,6 +102,7 @@ export function TokenExplorer() {
               ...t,
               image_uri: pumpData?.image_uri,
               usd_market_cap: pumpData?.usd_market_cap,
+              description: pumpData?.description, // Added description field
               isHovered: true,
               isLoadingHoverData: false,
             }
@@ -467,6 +470,14 @@ export function TokenExplorer() {
                           <span className="font-semibold text-muted-foreground font-sans">All-time High: </span>
                           <span className="text-foreground font-sans">{formatMarketCap(token.ath_market_cap)}</span>
                         </div>
+                        {token.description && (
+                          <div>
+                            <span className="font-semibold text-muted-foreground font-sans">Description: </span>
+                            <span className="text-foreground font-sans text-xs leading-relaxed">
+                              {token.description}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs font-sans">{getShortMint(token.mint)}</span>
                           <Button
@@ -532,4 +543,3 @@ export function TokenExplorer() {
     </div>
   )
 }
-
