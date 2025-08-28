@@ -21,10 +21,10 @@ export async function GET(request: NextRequest) {
 
     const data = await response.json()
 
-    // Return only the fields we need
     return NextResponse.json({
       image_uri: data.image_uri,
       usd_market_cap: data.usd_market_cap,
+      description: data.description || "",
     })
   } catch (error) {
     console.error("Error fetching pump.fun data:", error)
