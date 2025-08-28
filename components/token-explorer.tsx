@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Loader2, Copy } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -299,247 +300,267 @@ export function TokenExplorer() {
     }
   }
 
+  const getTruncatedDescription = (description: string) => {
+    if (description.length <= 8) return description
+    return description.slice(0, 8) + "..."
+  }
+
   return (
-    <div className="container mx-auto p-6 space-y-8 max-w-7xl font-sans">
-      <Card className="border border-gray-300 shadow-none" style={{ borderWidth: "1.5px" }}>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-2xl font-bold font-sans">Filters & Sorting</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="space-y-2">
-              <Label className="font-sans">Start Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal font-sans text-sm",
-                      !startDate && "text-muted-foreground",
-                    )}
-                  >
-                    {startDate ? format(startDate, "PPP") : "Earliest Creation Date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="font-sans">End Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal font-sans text-sm",
-                      !endDate && "text-muted-foreground",
-                    )}
-                  >
-                    {endDate ? format(endDate, "PPP") : "Latest Creation Date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="font-sans">Minimum ATH Market Cap</Label>
-              <Input
-                type="number"
-                value={minAthMarketCap}
-                onChange={(e) => setMinAthMarketCap(e.target.value)}
-                className="font-sans text-sm"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="font-sans">Sort By</Label>
-              <Select value={sortOrder} onValueChange={(value: "newest" | "oldest") => setSortOrder(value)}>
-                <SelectTrigger className="w-full font-sans text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest" className="font-sans">
-                    Newest
-                  </SelectItem>
-                  <SelectItem value="oldest" className="font-sans">
-                    Oldest
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-4">
-            <Button onClick={handleFilter} className="font-sans">
-              Apply
-            </Button>
-            <Button onClick={handleReset} variant="outline" className="bg-transparent font-sans">
-              Reset
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold font-sans">Tokens</h2>
-          <Badge variant="secondary" className="text-sm px-3 py-1 font-sans">
-            {totalCount.toLocaleString()} results
-          </Badge>
-        </div>
-
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Card
-                key={i}
-                className="animate-pulse border border-gray-300 shadow-none"
-                style={{ borderWidth: "1.5px" }}
-              >
-                <CardContent className="p-6">
-                  <div className="space-y-4">
-                    <div className="h-5 bg-muted rounded w-3/4"></div>
-                    <div className="h-4 bg-muted rounded w-1/2"></div>
-                    <div className="h-4 bg-muted rounded w-full"></div>
-                    <div className="h-4 bg-muted rounded w-2/3"></div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {tokens.map((token, index) => (
-              <Card
-                key={token.mint}
-                className="border border-gray-300 shadow-none hover:shadow-sm transition-all duration-200"
-                style={{ borderWidth: "1.5px" }}
-                ref={index === tokens.length - 1 ? lastTokenRef : null}
-                onMouseEnter={() => handleTokenHover(token.mint)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex gap-4">
-                    <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center text-xl font-bold flex-shrink-0 overflow-hidden">
-                      {token.isLoadingHoverData ? (
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                      ) : token.image_uri ? (
-                        <img
-                          src={token.image_uri || "/placeholder.svg"}
-                          alt={token.name}
-                          className="w-full h-full object-cover rounded-lg"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement
-                            target.style.display = "none"
-                            const parent = target.parentElement
-                            if (parent) {
-                              parent.textContent = token.name ? token.name.charAt(0).toUpperCase() : "?"
-                            }
-                          }}
-                        />
-                      ) : (
-                        <span>{token.name ? token.name.charAt(0).toUpperCase() : "?"}</span>
+    <TooltipProvider>
+      <div className="container mx-auto p-6 space-y-8 max-w-7xl font-sans">
+        <Card className="border border-gray-300 shadow-none" style={{ borderWidth: "1.5px" }}>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-2xl font-bold font-sans">Filters & Sorting</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-2">
+                <Label className="font-sans">Start Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal font-sans text-sm",
+                        !startDate && "text-muted-foreground",
                       )}
+                    >
+                      {startDate ? format(startDate, "PPP") : "Earliest Creation Date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-sans">End Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal font-sans text-sm",
+                        !endDate && "text-muted-foreground",
+                      )}
+                    >
+                      {endDate ? format(endDate, "PPP") : "Latest Creation Date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-sans">Minimum ATH Market Cap</Label>
+                <Input
+                  type="number"
+                  value={minAthMarketCap}
+                  onChange={(e) => setMinAthMarketCap(e.target.value)}
+                  className="font-sans text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-sans">Sort By</Label>
+                <Select value={sortOrder} onValueChange={(value: "newest" | "oldest") => setSortOrder(value)}>
+                  <SelectTrigger className="w-full font-sans text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest" className="font-sans">
+                      Newest
+                    </SelectItem>
+                    <SelectItem value="oldest" className="font-sans">
+                      Oldest
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleFilter} className="font-sans">
+                Apply
+              </Button>
+              <Button onClick={handleReset} variant="outline" className="bg-transparent font-sans">
+                Reset
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold font-sans">Tokens</h2>
+            <Badge variant="secondary" className="text-sm px-3 py-1 font-sans">
+              {totalCount.toLocaleString()} results
+            </Badge>
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Card
+                  key={i}
+                  className="animate-pulse border border-gray-300 shadow-none"
+                  style={{ borderWidth: "1.5px" }}
+                >
+                  <CardContent className="p-6">
+                    <div className="space-y-4">
+                      <div className="h-5 bg-muted rounded w-3/4"></div>
+                      <div className="h-4 bg-muted rounded w-1/2"></div>
+                      <div className="h-4 bg-muted rounded w-full"></div>
+                      <div className="h-4 bg-muted rounded w-2/3"></div>
                     </div>
-                    <div className="flex-1 min-w-0 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-base text-foreground truncate font-sans" title={token.name}>
-                          {token.name || "Unnamed Token"}
-                        </h3>
-                        <Badge variant="secondary" className="text-xs font-medium font-sans">
-                          {token.symbol || "N/A"}
-                        </Badge>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {tokens.map((token, index) => (
+                <Card
+                  key={token.mint}
+                  className="border border-gray-300 shadow-none hover:shadow-sm transition-all duration-200"
+                  style={{ borderWidth: "1.5px" }}
+                  ref={index === tokens.length - 1 ? lastTokenRef : null}
+                  onMouseEnter={() => handleTokenHover(token.mint)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex gap-4">
+                      <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center text-xl font-bold flex-shrink-0 overflow-hidden">
+                        {token.isLoadingHoverData ? (
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        ) : token.image_uri ? (
+                          <img
+                            src={token.image_uri || "/placeholder.svg"}
+                            alt={token.name}
+                            className="w-full h-full object-cover rounded-lg"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement
+                              target.style.display = "none"
+                              const parent = target.parentElement
+                              if (parent) {
+                                parent.textContent = token.name ? token.name.charAt(0).toUpperCase() : "?"
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span>{token.name ? token.name.charAt(0).toUpperCase() : "?"}</span>
+                        )}
                       </div>
-                      <div className="space-y-1 text-sm">
-                        <div>
-                          <span className="font-semibold text-muted-foreground font-sans">Created At: </span>
-                          <span className="text-foreground font-sans">
-                            {format(new Date(token.createdAt), "dd/MM/yyyy")}
-                          </span>
+                      <div className="flex-1 min-w-0 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-base text-foreground truncate font-sans" title={token.name}>
+                            {token.name || "Unnamed Token"}
+                          </h3>
+                          <Badge variant="secondary" className="text-xs font-medium font-sans">
+                            {token.symbol || "N/A"}
+                          </Badge>
                         </div>
-                        <div>
-                          <span className="font-semibold text-muted-foreground font-sans">Market Cap: </span>
-                          <span className="text-foreground font-sans">{formatMarketCap(token.usd_market_cap)}</span>
-                        </div>
-                        <div>
-                          <span className="font-semibold text-muted-foreground font-sans">All-time High: </span>
-                          <span className="text-foreground font-sans">{formatMarketCap(token.ath_market_cap)}</span>
-                        </div>
-                        {token.description && (
+                        <div className="space-y-1 text-sm">
                           <div>
-                            <span className="font-semibold text-muted-foreground font-sans">Description: </span>
-                            <span className="text-foreground font-sans text-xs leading-relaxed">
-                              {token.description}
+                            <span className="font-semibold text-muted-foreground font-sans">Created At: </span>
+                            <span className="text-foreground font-sans">
+                              {format(new Date(token.createdAt), "dd/MM/yyyy")}
                             </span>
                           </div>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-sans">{getShortMint(token.mint)}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => copyToClipboard(token.mint)}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
+                          <div>
+                            <span className="font-semibold text-muted-foreground font-sans">Market Cap: </span>
+                            <span className="text-foreground font-sans">{formatMarketCap(token.usd_market_cap)}</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-muted-foreground font-sans">All-time High: </span>
+                            <span className="text-foreground font-sans">{formatMarketCap(token.ath_market_cap)}</span>
+                          </div>
+                          {token.description && (
+                            <div>
+                              <span className="font-semibold text-muted-foreground font-sans">Description: </span>
+                              {token.description.length > 8 ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-foreground font-sans text-xs leading-relaxed cursor-help">
+                                      {getTruncatedDescription(token.description)}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="max-w-xs">{token.description}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <span className="text-foreground font-sans text-xs leading-relaxed">
+                                  {token.description}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-sans">{getShortMint(token.mint)}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => copyToClipboard(token.mint)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <hr className="border-gray-200 w-full my-4" />
-                  <div className="flex justify-center gap-2 flex-wrap">
-                    <Badge
-                      className="text-white cursor-pointer hover:opacity-90 font-sans"
-                      style={{ backgroundColor: "#c74ae3" }}
-                      onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}
-                    >
-                      Solscan.io
-                    </Badge>
-                    <Badge
-                      className="text-white cursor-pointer hover:opacity-90 font-sans"
-                      style={{ backgroundColor: "#53d793" }}
-                      onClick={() => window.open(`https://pump.fun/coins/${token.mint}`, "_blank")}
-                    >
-                      Pump.fun
-                    </Badge>
-                    <Badge
-                      className="text-white cursor-pointer hover:opacity-90 font-sans"
-                      style={{ backgroundColor: "#526fff" }}
-                      onClick={() => window.open(`https://axiom.trade/t/${token.mint}`, "_blank")}
-                    >
-                      Axiom.trade
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {loadingMore && (
-          <div className="flex items-center justify-center py-12">
-            <div className="flex items-center gap-3 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span className="text-lg font-sans">Loading more tokens...</span>
+                    <hr className="border-gray-200 w-full my-4" />
+                    <div className="flex justify-center gap-2 flex-wrap">
+                      <Badge
+                        className="text-white cursor-pointer hover:opacity-90 font-sans"
+                        style={{ backgroundColor: "#c74ae3" }}
+                        onClick={() => window.open(`https://solscan.io/token/${token.mint}`, "_blank")}
+                      >
+                        Solscan.io
+                      </Badge>
+                      <Badge
+                        className="text-white cursor-pointer hover:opacity-90 font-sans"
+                        style={{ backgroundColor: "#53d793" }}
+                        onClick={() => window.open(`https://pump.fun/coins/${token.mint}`, "_blank")}
+                      >
+                        Pump.fun
+                      </Badge>
+                      <Badge
+                        className="text-white cursor-pointer hover:opacity-90 font-sans"
+                        style={{ backgroundColor: "#526fff" }}
+                        onClick={() => window.open(`https://axiom.trade/t/${token.mint}`, "_blank")}
+                      >
+                        Axiom.trade
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </div>
-        )}
+          )}
 
-        {!hasMore && tokens.length > 0 && (
-          <div className="text-center py-12">
-            <div className="space-y-2">
-              <p className="text-lg font-medium text-muted-foreground font-sans">You've reached the end!</p>
-              <p className="text-sm text-muted-foreground font-sans">No more tokens to load</p>
+          {loadingMore && (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex items-center gap-3 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-lg font-sans">Loading more tokens...</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {!hasMore && tokens.length > 0 && (
+            <div className="text-center py-12">
+              <div className="space-y-2">
+                <p className="text-lg font-medium text-muted-foreground font-sans">You've reached the end!</p>
+                <p className="text-sm text-muted-foreground font-sans">No more tokens to load</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   )
 }
