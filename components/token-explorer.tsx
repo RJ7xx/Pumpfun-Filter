@@ -222,6 +222,38 @@ export function TokenExplorer() {
       // So we incrementally reflect the number of displayed items loaded so far.
       if (needsAthFiltering) {
         setTotalCount((prev) => prev + displayTokens.length)
+        
+        // Auto-fetch pump data for all tokens when ATH filtering is active
+        const fetchPumpDataForTokens = async () => {
+          const tokensToUpdate = displayTokens.filter(token => !(token as any).isHovered && !(token as any).isLoadingHoverData)
+          
+          for (const token of tokensToUpdate) {
+            try {
+              const pumpData = await fetchPumpData(token.mint)
+              setTokens((prev) =>
+                prev.map((t) =>
+                  t.mint === token.mint
+                    ? {
+                        ...t,
+                        image_uri: pumpData?.image_uri,
+                        usd_market_cap: pumpData?.usd_market_cap,
+                        description: pumpData?.description,
+                        isHovered: true,
+                      }
+                    : t,
+                ),
+              )
+              // Small delay to avoid overwhelming the API
+              await new Promise(resolve => setTimeout(resolve, 100))
+            } catch (error) {
+              console.log(`Auto-fetch failed for ${token.mint}, hover will work as fallback`)
+              // Don't set error state, just let hover work as usual
+            }
+          }
+        }
+        
+        // Run auto-fetch in background
+        fetchPumpDataForTokens()
       }
 
       if (isLoadMore) {
