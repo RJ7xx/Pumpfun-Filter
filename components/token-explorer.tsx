@@ -19,13 +19,53 @@ import { cn } from "@/lib/utils"
 const TokenImage = ({ mint, name, imageUrl }: { mint: string; name: string; imageUrl: string }) => {
   const [imageError, setImageError] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null)
+  const [tryingFallback, setTryingFallback] = useState(false)
 
-  const handleImageError = () => {
+  const handleImageError = async () => {
+    if (!tryingFallback && !fallbackUrl) {
+      setTryingFallback(true)
+      try {
+        // Fetch pump data to get image_uri for fallback
+        const response = await fetch(`/api/pump-data?mint=${mint}`)
+        if (response.ok) {
+          const text = await response.text()
+          if (text) {
+            const pumpData = JSON.parse(text)
+            if (pumpData?.image_uri) {
+              // Extract part1 (IPFS hash) and part2 (full URL)
+              const imageUri = pumpData.image_uri
+              let part1 = ""
+              let part2 = imageUri
+              
+              // Extract IPFS hash from URL
+              if (imageUri.includes('/ipfs/')) {
+                part1 = imageUri.split('/ipfs/')[1]
+              } else if (imageUri.includes('ipfs://')) {
+                part1 = imageUri.replace('ipfs://', '')
+              }
+              
+              // Construct fallback URL
+              const fallback = `https://images.pump.fun/coin-image/${mint}?variant=86x86&ipfs=${part1}&src=${encodeURIComponent(imageUri)}`
+              setFallbackUrl(fallback)
+              return // Don't set error yet, try fallback first
+            }
+          }
+        }
+      } catch (error) {
+        console.log(`Failed to get fallback image for ${mint}:`, error)
+      }
+      setTryingFallback(false)
+    }
     setImageError(true)
   }
 
   const handleImageLoad = () => {
     setImageLoaded(true)
+  }
+
+  const handleFallbackError = () => {
+    setImageError(true)
   }
 
   if (imageError) {
@@ -37,14 +77,25 @@ const TokenImage = ({ mint, name, imageUrl }: { mint: string; name: string; imag
       {!imageLoaded && (
         <span className="absolute">{name ? name.charAt(0).toUpperCase() : "?"}</span>
       )}
-      <img
-        src={imageUrl}
-        alt={name}
-        className="w-full h-full object-cover rounded-lg"
-        onError={handleImageError}
-        onLoad={handleImageLoad}
-        style={{ display: imageLoaded ? 'block' : 'none' }}
-      />
+      {!fallbackUrl ? (
+        <img
+          src={imageUrl}
+          alt={name}
+          className="w-full h-full object-cover rounded-lg"
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+          style={{ display: imageLoaded ? 'block' : 'none' }}
+        />
+      ) : (
+        <img
+          src={fallbackUrl}
+          alt={name}
+          className="w-full h-full object-cover rounded-lg"
+          onError={handleFallbackError}
+          onLoad={handleImageLoad}
+          style={{ display: imageLoaded ? 'block' : 'none' }}
+        />
+      )}
     </>
   )
 }
