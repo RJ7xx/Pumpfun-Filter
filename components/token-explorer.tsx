@@ -18,11 +18,11 @@ import { cn } from "@/lib/utils"
 interface Token {
   mint: string
   name: string
-  symbol: string
+  ticker: string
   createdAt: string
+  ath: number | string
   image_uri?: string
   usd_market_cap?: number
-  ath_market_cap?: number
   description?: string // Added description field
   isHovered?: boolean
   isLoadingHoverData?: boolean
@@ -32,10 +32,6 @@ interface PumpData {
   image_uri: string
   usd_market_cap: number
   description: string // Added description field
-}
-
-interface SolanaTrackerData {
-  highest_market_cap: number
 }
 
 export function TokenExplorer() {
@@ -49,7 +45,7 @@ export function TokenExplorer() {
   const [hasMore, setHasMore] = useState(true)
   const [offset, setOffset] = useState(0)
   const [totalCount, setTotalCount] = useState<number>(0)
-  const observerRef = useRef<HTMLDivElement>(null)
+  const observerRef = useRef<IntersectionObserver | null>(null)
 
   const ITEMS_PER_PAGE = 30
 
@@ -58,7 +54,7 @@ export function TokenExplorer() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 
-  const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 
   const fetchPumpData = async (mint: string): Promise<PumpData | null> => {
     try {
@@ -75,18 +71,7 @@ export function TokenExplorer() {
     }
   }
 
-  const fetchSolanaTrackerData = async (mint: string): Promise<SolanaTrackerData | null> => {
-    try {
-      const response = await fetch(`/api/solana-tracker?mint=${mint}`)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      return await response.json()
-    } catch (error) {
-      console.error(`Error fetching Solana Tracker data for ${mint}:`, error)
-      return null
-    }
-  }
+
 
   const handleTokenHover = async (tokenMint: string) => {
     const token = tokens.find((t) => t.mint === tokenMint)
@@ -124,11 +109,16 @@ export function TokenExplorer() {
 
     try {
       const currentOffset = isLoadMore ? offset : 0
-      const minAthMarketCapNum = minAthMarketCap ? Number(minAthMarketCap) : 0
+      const minAthMarketCapNum = minAthMarketCap ? parseFloat(minAthMarketCap) : 0
       const needsAthFiltering = minAthMarketCapNum > 0
 
+      if (!isLoadMore) {
+        // Reset count when applying new filters
+        setTotalCount(0)
+      }
+
       if (!isLoadMore && !needsAthFiltering) {
-        let countQuery = supabase.from("tokens").select("*", { count: "exact", head: true })
+        let countQuery = supabase.from("tokens2").select("*", { count: "exact", head: true })
 
         if (startDate) {
           const startTimestamp = Math.floor(startDate.getTime() / 1000)
@@ -144,7 +134,7 @@ export function TokenExplorer() {
         setTotalCount(count || 0)
       }
 
-      let query = supabase.from("tokens").select("mint, name, symbol, createdAt")
+      let query = supabase.from("tokens2").select("mint, name, ticker, createdAt, ath")
 
       if (startDate) {
         const startTimestamp = Math.floor(startDate.getTime() / 1000)
@@ -158,9 +148,10 @@ export function TokenExplorer() {
 
       query = query.order("createdAt", { ascending: sortOrder === "oldest" })
 
-      const fetchSize = needsAthFiltering ? ITEMS_PER_PAGE * 3 : ITEMS_PER_PAGE
+      // Do NOT apply server-side ATH filter because 'ath' may be stored as text; we filter client-side
+
       const from = currentOffset
-      const to = from + fetchSize - 1
+      const to = from + ITEMS_PER_PAGE - 1
       query = query.range(from, to)
 
       const { data, error } = await query
@@ -180,63 +171,65 @@ export function TokenExplorer() {
         createdAt: new Date(Number.parseInt(token.createdAt.toString()) * 1000).toISOString(),
       }))
 
-      let filteredTokens = processedTokens
+      let displayTokens = needsAthFiltering
+        ? processedTokens.filter((t) => {
+            const v = typeof t.ath === "string" ? parseFloat(t.ath) : (t.ath as number)
+            return v !== undefined && v !== null && !Number.isNaN(v) && v >= minAthMarketCapNum
+          })
+        : processedTokens
 
-      if (needsAthFiltering) {
-        const tokensWithAth: Token[] = []
-
-        for (const token of processedTokens) {
-          const solanaTrackerData = await fetchSolanaTrackerData(token.mint)
-          const tokenWithAth = {
+      // Fallback: if after filtering nothing to show, pull additional pages until we find some or reach end
+      if (needsAthFiltering && displayTokens.length === 0) {
+        let nextOffset = currentOffset + data.length
+        let lastBatchLen = data.length
+        // Limit the number of extra pages to avoid long waits
+        let extraPagesFetched = 0
+        while (lastBatchLen === ITEMS_PER_PAGE && displayTokens.length === 0 && extraPagesFetched < 5) {
+          let moreQuery = supabase.from("tokens2").select("mint, name, ticker, createdAt, ath")
+          if (startDate) {
+            const startTimestamp = Math.floor(startDate.getTime() / 1000)
+            moreQuery = moreQuery.gte("createdAt", startTimestamp)
+          }
+          if (endDate) {
+            const endTimestamp = Math.floor((endDate.getTime() + 86400000) / 1000)
+            moreQuery = moreQuery.lt("createdAt", endTimestamp)
+          }
+          moreQuery = moreQuery.order("createdAt", { ascending: sortOrder === "oldest" })
+          moreQuery = moreQuery.range(nextOffset, nextOffset + ITEMS_PER_PAGE - 1)
+          const { data: moreData, error: moreError } = await moreQuery
+          if (moreError) break
+          const moreProcessed = (moreData || []).map((token) => ({
             ...token,
-            ath_market_cap: solanaTrackerData?.highest_market_cap,
-          }
-
-          if (tokenWithAth.ath_market_cap && tokenWithAth.ath_market_cap >= minAthMarketCapNum) {
-            tokensWithAth.push(tokenWithAth)
-          }
-
-          await delay(100)
+            createdAt: new Date(Number.parseInt(token.createdAt.toString()) * 1000).toISOString(),
+          }))
+          const moreDisplay = moreProcessed.filter((t) => {
+            const v = typeof t.ath === "string" ? parseFloat(t.ath) : (t.ath as number)
+            return v !== undefined && v !== null && !Number.isNaN(v) && v >= minAthMarketCapNum
+          })
+          displayTokens = moreDisplay
+          lastBatchLen = moreProcessed.length
+          nextOffset += lastBatchLen
+          extraPagesFetched += 1
         }
+      }
 
-        filteredTokens = tokensWithAth
-
-        if (!isLoadMore) {
-          // For initial load with ATH filtering, we need to estimate total count
-          // This is a rough estimate based on the filtering ratio
-          const filterRatio = filteredTokens.length / processedTokens.length
-          let estimatedTotal = 0
-
-          if (filterRatio > 0) {
-            // Get total count without ATH filter first
-            let countQuery = supabase.from("tokens").select("*", { count: "exact", head: true })
-
-            if (startDate) {
-              const startTimestamp = Math.floor(startDate.getTime() / 1000)
-              countQuery = countQuery.gte("createdAt", startTimestamp)
-            }
-
-            if (endDate) {
-              const endTimestamp = Math.floor((endDate.getTime() + 86400000) / 1000)
-              countQuery = countQuery.lt("createdAt", endTimestamp)
-            }
-
-            const { count } = await countQuery
-            estimatedTotal = Math.round((count || 0) * filterRatio)
-          }
-
-          setTotalCount(estimatedTotal)
-        }
+      // Update total count for ATH filtering if needed
+      // For ATH filtering, we can't get an accurate count when 'ath' is text.
+      // So we incrementally reflect the number of displayed items loaded so far.
+      if (needsAthFiltering) {
+        setTotalCount((prev) => prev + displayTokens.length)
       }
 
       if (isLoadMore) {
-        setTokens((prev) => [...prev, ...filteredTokens])
+        setTokens((prev) => [...prev, ...displayTokens])
       } else {
-        setTokens(filteredTokens)
+        setTokens(displayTokens)
       }
 
+      // Advance pagination by the raw page size returned by the server
       setOffset(currentOffset + data.length)
-      setHasMore(data.length === fetchSize)
+      // Keep loading more while server is returning full pages
+      setHasMore(data.length === ITEMS_PER_PAGE)
     } catch (error) {
       console.error("Error:", error)
     } finally {
@@ -289,14 +282,20 @@ export function TokenExplorer() {
     return `${mint.slice(0, 4)}...${mint.slice(-4)}`
   }
 
-  const formatMarketCap = (marketCap: number | undefined) => {
-    if (!marketCap) return "N/A"
-    if (marketCap >= 1000000) {
-      return `$${(marketCap / 1000000).toFixed(2)}M`
-    } else if (marketCap >= 1000) {
-      return `$${(marketCap / 1000).toFixed(2)}k`
+  const formatMarketCap = (marketCap: number | string | undefined | null) => {
+    // Convert to number and handle all edge cases
+    const numValue = typeof marketCap === 'string' ? parseFloat(marketCap) : marketCap
+    
+    if (numValue === undefined || numValue === null || isNaN(numValue) || numValue < 0) {
+      return "N/A"
+    }
+    
+    if (numValue >= 1000000) {
+      return `$${(numValue / 1000000).toFixed(2)}M`
+    } else if (numValue >= 1000) {
+      return `$${(numValue / 1000).toFixed(2)}k`
     } else {
-      return `$${marketCap.toFixed(2)}`
+      return `$${numValue.toFixed(2)}`
     }
   }
 
@@ -459,7 +458,7 @@ export function TokenExplorer() {
                             {token.name || "Unnamed Token"}
                           </h3>
                           <Badge variant="secondary" className="text-xs font-medium font-sans">
-                            {token.symbol || "N/A"}
+                            {token.ticker || "N/A"}
                           </Badge>
                         </div>
                         <div className="space-y-1 text-sm">
@@ -475,7 +474,7 @@ export function TokenExplorer() {
                           </div>
                           <div>
                             <span className="font-semibold text-muted-foreground font-sans">All-time High: </span>
-                            <span className="text-foreground font-sans">{formatMarketCap(token.ath_market_cap)}</span>
+                            <span className="text-foreground font-sans">{formatMarketCap(token.ath)}</span>
                           </div>
                           {token.description && (
                             <div>
