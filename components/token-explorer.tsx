@@ -178,10 +178,13 @@ export function TokenExplorer() {
           })
         : processedTokens
 
+      // Track how many raw rows we fetched (for offset) and last batch size (for hasMore)
+      let totalFetchedRaw = data.length
+      let lastBatchLen = data.length
+
       // Fallback: if after filtering nothing to show, pull additional pages until we find some or reach end
       if (needsAthFiltering && displayTokens.length === 0) {
         let nextOffset = currentOffset + data.length
-        let lastBatchLen = data.length
         // Limit the number of extra pages to avoid long waits
         let extraPagesFetched = 0
         while (lastBatchLen === ITEMS_PER_PAGE && displayTokens.length === 0 && extraPagesFetched < 5) {
@@ -208,6 +211,7 @@ export function TokenExplorer() {
           })
           displayTokens = moreDisplay
           lastBatchLen = moreProcessed.length
+          totalFetchedRaw += moreProcessed.length
           nextOffset += lastBatchLen
           extraPagesFetched += 1
         }
@@ -221,15 +225,35 @@ export function TokenExplorer() {
       }
 
       if (isLoadMore) {
-        setTokens((prev) => [...prev, ...displayTokens])
+        setTokens((prev) => {
+          const merged = [...prev, ...displayTokens]
+          const seen = new Set<string>()
+          const unique: Token[] = []
+          for (const t of merged) {
+            if (!seen.has(t.mint)) {
+              seen.add(t.mint)
+              unique.push(t)
+            }
+          }
+          return unique
+        })
       } else {
-        setTokens(displayTokens)
+        // Also dedupe in case the backend returns duplicates in the first page
+        const seen = new Set<string>()
+        const unique: Token[] = []
+        for (const t of displayTokens) {
+          if (!seen.has(t.mint)) {
+            seen.add(t.mint)
+            unique.push(t)
+          }
+        }
+        setTokens(unique)
       }
 
-      // Advance pagination by the raw page size returned by the server
-      setOffset(currentOffset + data.length)
-      // Keep loading more while server is returning full pages
-      setHasMore(data.length === ITEMS_PER_PAGE)
+      // Advance pagination by ALL rows fetched (including fallback pages)
+      setOffset(currentOffset + totalFetchedRaw)
+      // Keep loading if the last batch from the server was full-size
+      setHasMore(lastBatchLen === ITEMS_PER_PAGE)
     } catch (error) {
       console.error("Error:", error)
     } finally {
