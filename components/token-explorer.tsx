@@ -658,7 +658,7 @@ export function TokenExplorer() {
                       <Badge
                         className="text-white cursor-pointer hover:opacity-90 font-sans"
                         style={{ backgroundColor: "#53d793" }}
-                        onClick={() => window.open(`https://pump.fun/coins/${token.mint}`, "_blank")}
+                        onClick={() => window.open(`https://pump.fun/coin/${token.mint}`, "_blank")}
                       >
                         Pump.fun
                       </Badge>
