@@ -71,6 +71,10 @@ export function TokenExplorer() {
     }
   }
 
+  const getTokenImageUrl = (mint: string): string => {
+    return `https://axiomtrading.sfo3.cdn.digitaloceanspaces.com/${mint}.webp`
+  }
+
 
 
   const handleTokenHover = async (tokenMint: string) => {
@@ -86,9 +90,9 @@ export function TokenExplorer() {
         t.mint === tokenMint
           ? {
               ...t,
-              image_uri: pumpData?.image_uri,
+              // Don't update image_uri here - it's now handled by getTokenImageUrl
               usd_market_cap: pumpData?.usd_market_cap,
-              description: pumpData?.description, // Added description field
+              description: pumpData?.description,
               isHovered: true,
               isLoadingHoverData: false,
             }
@@ -223,34 +227,34 @@ export function TokenExplorer() {
       if (needsAthFiltering) {
         setTotalCount((prev) => prev + displayTokens.length)
         
-        // Auto-fetch pump data for all tokens when ATH filtering is active
-        const fetchPumpDataForTokens = async () => {
-          const tokensToUpdate = displayTokens.filter(token => !(token as any).isHovered && !(token as any).isLoadingHoverData)
-          
-          for (const token of tokensToUpdate) {
-            try {
-              const pumpData = await fetchPumpData(token.mint)
-              setTokens((prev) =>
-                prev.map((t) =>
-                  t.mint === token.mint
-                    ? {
-                        ...t,
-                        image_uri: pumpData?.image_uri,
-                        usd_market_cap: pumpData?.usd_market_cap,
-                        description: pumpData?.description,
-                        isHovered: true,
-                      }
-                    : t,
-                ),
-              )
-              // Small delay to avoid overwhelming the API
-              await new Promise(resolve => setTimeout(resolve, 100))
-            } catch (error) {
-              console.log(`Auto-fetch failed for ${token.mint}, hover will work as fallback`)
-              // Don't set error state, just let hover work as usual
-            }
-          }
-        }
+                 // Auto-fetch pump data for all tokens when ATH filtering is active
+         const fetchPumpDataForTokens = async () => {
+           const tokensToUpdate = displayTokens.filter(token => !(token as any).isHovered && !(token as any).isLoadingHoverData)
+           
+           for (const token of tokensToUpdate) {
+             try {
+               const pumpData = await fetchPumpData(token.mint)
+               setTokens((prev) =>
+                 prev.map((t) =>
+                   t.mint === token.mint
+                     ? {
+                         ...t,
+                         // Don't update image_uri here - it's now handled by getTokenImageUrl
+                         usd_market_cap: pumpData?.usd_market_cap,
+                         description: pumpData?.description,
+                         isHovered: true,
+                       }
+                     : t,
+                 ),
+               )
+               // Small delay to avoid overwhelming the API
+               await new Promise(resolve => setTimeout(resolve, 100))
+             } catch (error) {
+               console.log(`Auto-fetch failed for ${token.mint}, hover will work as fallback`)
+               // Don't set error state, just let hover work as usual
+             }
+           }
+         }
         
         // Run auto-fetch in background
         fetchPumpDataForTokens()
@@ -487,27 +491,25 @@ export function TokenExplorer() {
                 >
                   <CardContent className="p-4">
                     <div className="flex gap-4">
-                      <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center text-xl font-bold flex-shrink-0 overflow-hidden">
-                        {token.isLoadingHoverData ? (
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                        ) : token.image_uri ? (
-                          <img
-                            src={token.image_uri || "/placeholder.svg"}
-                            alt={token.name}
-                            className="w-full h-full object-cover rounded-lg"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement
-                              target.style.display = "none"
-                              const parent = target.parentElement
-                              if (parent) {
-                                parent.textContent = token.name ? token.name.charAt(0).toUpperCase() : "?"
-                              }
-                            }}
-                          />
-                        ) : (
-                          <span>{token.name ? token.name.charAt(0).toUpperCase() : "?"}</span>
-                        )}
-                      </div>
+                                             <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center text-xl font-bold flex-shrink-0 overflow-hidden">
+                         {token.isLoadingHoverData ? (
+                           <Loader2 className="h-6 w-6 animate-spin" />
+                         ) : (
+                           <img
+                             src={getTokenImageUrl(token.mint)}
+                             alt={token.name}
+                             className="w-full h-full object-cover rounded-lg"
+                             onError={(e) => {
+                               const target = e.target as HTMLImageElement
+                               target.style.display = "none"
+                               const parent = target.parentElement
+                               if (parent) {
+                                 parent.textContent = token.name ? token.name.charAt(0).toUpperCase() : "?"
+                               }
+                             }}
+                           />
+                         )}
+                       </div>
                       <div className="flex-1 min-w-0 space-y-3">
                         <div className="flex items-center gap-2">
                           <h3 className="font-bold text-base text-foreground truncate font-sans" title={token.name}>
