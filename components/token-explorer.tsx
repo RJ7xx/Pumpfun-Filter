@@ -15,6 +15,40 @@ import { Loader2, Copy } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 
+// TokenImage component to handle image loading with proper error handling
+const TokenImage = ({ mint, name, imageUrl }: { mint: string; name: string; imageUrl: string }) => {
+  const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+
+  const handleImageError = () => {
+    setImageError(true)
+  }
+
+  const handleImageLoad = () => {
+    setImageLoaded(true)
+  }
+
+  if (imageError) {
+    return <span>{name ? name.charAt(0).toUpperCase() : "?"}</span>
+  }
+
+  return (
+    <>
+      {!imageLoaded && (
+        <span className="absolute">{name ? name.charAt(0).toUpperCase() : "?"}</span>
+      )}
+      <img
+        src={imageUrl}
+        alt={name}
+        className="w-full h-full object-cover rounded-lg"
+        onError={handleImageError}
+        onLoad={handleImageLoad}
+        style={{ display: imageLoaded ? 'block' : 'none' }}
+      />
+    </>
+  )
+}
+
 interface Token {
   mint: string
   name: string
@@ -495,18 +529,10 @@ export function TokenExplorer() {
                          {token.isLoadingHoverData ? (
                            <Loader2 className="h-6 w-6 animate-spin" />
                          ) : (
-                           <img
-                             src={getTokenImageUrl(token.mint)}
-                             alt={token.name}
-                             className="w-full h-full object-cover rounded-lg"
-                             onError={(e) => {
-                               const target = e.target as HTMLImageElement
-                               target.style.display = "none"
-                               const parent = target.parentElement
-                               if (parent) {
-                                 parent.textContent = token.name ? token.name.charAt(0).toUpperCase() : "?"
-                               }
-                             }}
+                           <TokenImage 
+                             mint={token.mint} 
+                             name={token.name} 
+                             imageUrl={getTokenImageUrl(token.mint)}
                            />
                          )}
                        </div>
