@@ -235,9 +235,13 @@ export function TokenExplorer() {
         query = query.lt("createdAt", endTimestamp)
       }
 
-      query = query.order("createdAt", { ascending: sortOrder === "oldest" })
+      // Apply server-side ATH filter if needed
+      if (needsAthFiltering) {
+  // Now 'ath' is numeric, so filter directly
+  query = query.gte('ath', minAthMarketCapNum)
+      }
 
-      // Do NOT apply server-side ATH filter because 'ath' may be stored as text; we filter client-side
+      query = query.order("createdAt", { ascending: sortOrder === "oldest" })
 
       const from = currentOffset
       const to = from + ITEMS_PER_PAGE - 1
@@ -262,8 +266,8 @@ export function TokenExplorer() {
 
       let displayTokens = needsAthFiltering
         ? processedTokens.filter((t) => {
-            const v = typeof t.ath === "string" ? parseFloat(t.ath) : (t.ath as number)
-            return v !== undefined && v !== null && !Number.isNaN(v) && v >= minAthMarketCapNum
+            const v = t.ath as number;
+            return v !== undefined && v !== null && !Number.isNaN(v) && v >= minAthMarketCapNum;
           })
         : processedTokens
 
@@ -273,36 +277,38 @@ export function TokenExplorer() {
 
       // Fallback: if after filtering nothing to show, pull additional pages until we find some or reach end
       if (needsAthFiltering && displayTokens.length === 0) {
-        let nextOffset = currentOffset + data.length
-        // Limit the number of extra pages to avoid long waits
-        let extraPagesFetched = 0
-        while (lastBatchLen === ITEMS_PER_PAGE && displayTokens.length === 0 && extraPagesFetched < 5) {
-          let moreQuery = supabase.from("tokens2").select("mint, name, ticker, createdAt, ath")
+        let nextOffset = currentOffset + data.length;
+        // Increase the number of extra pages to 10 for high ATH filters
+        let extraPagesFetched = 0;
+        while (lastBatchLen === ITEMS_PER_PAGE && displayTokens.length === 0 && extraPagesFetched < 10) {
+          let moreQuery = supabase.from("tokens2").select("mint, name, ticker, createdAt, ath");
           if (startDate) {
-            const startTimestamp = Math.floor(startDate.getTime() / 1000)
-            moreQuery = moreQuery.gte("createdAt", startTimestamp)
+            const startTimestamp = Math.floor(startDate.getTime() / 1000);
+            moreQuery = moreQuery.gte("createdAt", startTimestamp);
           }
           if (endDate) {
-            const endTimestamp = Math.floor((endDate.getTime() + 86400000) / 1000)
-            moreQuery = moreQuery.lt("createdAt", endTimestamp)
+            const endTimestamp = Math.floor((endDate.getTime() + 86400000) / 1000);
+            moreQuery = moreQuery.lt("createdAt", endTimestamp);
           }
-          moreQuery = moreQuery.order("createdAt", { ascending: sortOrder === "oldest" })
-          moreQuery = moreQuery.range(nextOffset, nextOffset + ITEMS_PER_PAGE - 1)
-          const { data: moreData, error: moreError } = await moreQuery
-          if (moreError) break
+          // Apply server-side ATH filter if needed
+          moreQuery = moreQuery.filter('ath::numeric', 'gte', minAthMarketCapNum);
+          moreQuery = moreQuery.order("createdAt", { ascending: sortOrder === "oldest" });
+          moreQuery = moreQuery.range(nextOffset, nextOffset + ITEMS_PER_PAGE - 1);
+          const { data: moreData, error: moreError } = await moreQuery;
+          if (moreError) break;
           const moreProcessed = (moreData || []).map((token) => ({
             ...token,
             createdAt: new Date(Number.parseInt(token.createdAt.toString()) * 1000).toISOString(),
-          }))
+          }));
           const moreDisplay = moreProcessed.filter((t) => {
-            const v = typeof t.ath === "string" ? parseFloat(t.ath) : (t.ath as number)
-            return v !== undefined && v !== null && !Number.isNaN(v) && v >= minAthMarketCapNum
-          })
-          displayTokens = moreDisplay
-          lastBatchLen = moreProcessed.length
-          totalFetchedRaw += moreProcessed.length
-          nextOffset += lastBatchLen
-          extraPagesFetched += 1
+            const v = t.ath as number;
+            return v !== undefined && v !== null && !Number.isNaN(v) && v >= minAthMarketCapNum;
+          });
+          displayTokens = moreDisplay;
+          lastBatchLen = moreProcessed.length;
+          totalFetchedRaw += moreProcessed.length;
+          nextOffset += lastBatchLen;
+          extraPagesFetched += 1;
         }
       }
 
