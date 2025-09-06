@@ -1,9 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useTheme } from 'next-themes'
 import { createBrowserClient } from "@supabase/ssr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Toggle } from "@/components/ui/toggle"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -120,6 +122,11 @@ interface PumpData {
 }
 
 export function TokenExplorer() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  const [endDateCalendarMonth, setEndDateCalendarMonth] = useState<Date | undefined>(undefined);
+  const [endDatePopoverOpen, setEndDatePopoverOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
   const [tokens, setTokens] = useState<Token[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -468,12 +475,22 @@ export function TokenExplorer() {
 
   return (
     <TooltipProvider>
-      <div className="container mx-auto p-6 space-y-8 max-w-7xl font-sans">
-        <Card className="border border-gray-300 shadow-none" style={{ borderWidth: "1.5px" }}>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-2xl font-bold font-sans">Filters & Sorting</CardTitle>
+      <div className="container mx-auto p-6 space-y-8 max-w-7xl font-sans relative bg-background text-foreground min-h-screen">
+        {/* Dark mode toggle at top right */}
+        <button
+          style={{ position: 'absolute', top: 24, right: 24, zIndex: 10, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+          aria-label="Toggle dark mode"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        >
+          {mounted && <span style={{ fontSize: 24 }}>{theme === 'dark' ? '🌙' : '☀️'}</span>}
+        </button>
+        <Card
+          className="bg-card border border-border shadow-none"
+        >
+          <CardHeader className="pb-4 bg-card">
+            <CardTitle className="text-2xl font-bold font-sans text-foreground">Filters & Sorting</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 bg-card">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="space-y-2">
                 <Label className="font-sans">Start Date</Label>
@@ -490,7 +507,12 @@ export function TokenExplorer() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
+                    <Calendar
+                      mode="single"
+                      selected={startDate}
+                      onSelect={setStartDate}
+                      initialFocus
+                    />
                   </PopoverContent>
                 </Popover>
               </div>
@@ -505,17 +527,30 @@ export function TokenExplorer() {
                         "w-full justify-start text-left font-normal font-sans text-sm",
                         !endDate && "text-muted-foreground",
                       )}
+                      onClick={() => {
+                        setEndDatePopoverOpen(true);
+                        setEndDateCalendarMonth(endDate ? endDate : startDate ? startDate : undefined);
+                      }}
                     >
                       {endDate ? format(endDate, "PPP") : "Latest Creation Date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent
+                    className="w-auto p-0"
+                    align="start"
+                    onOpenAutoFocus={() => setEndDatePopoverOpen(true)}
+                    onCloseAutoFocus={() => setEndDatePopoverOpen(false)}
+                  >
                     <Calendar
                       mode="single"
                       selected={endDate}
-                      onSelect={setEndDate}
+                      onSelect={(date) => {
+                        setEndDate(date);
+                        setEndDateCalendarMonth(undefined);
+                      }}
                       initialFocus
-                      month={startDate ? startDate : undefined}
+                      month={endDateCalendarMonth}
+                      onMonthChange={() => setEndDateCalendarMonth(undefined)}
                     />
                   </PopoverContent>
                 </Popover>
@@ -560,9 +595,9 @@ export function TokenExplorer() {
           </CardContent>
         </Card>
 
-        <div className="space-y-6">
+  <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold font-sans">Tokens</h2>
+            <h2 className="text-2xl font-bold font-sans text-foreground">Tokens</h2>
             <Badge variant="secondary" className="text-sm px-3 py-1 font-sans">
               {totalCount.toLocaleString()} results
             </Badge>
@@ -573,8 +608,7 @@ export function TokenExplorer() {
               {Array.from({ length: 8 }).map((_, i) => (
                 <Card
                   key={i}
-                  className="animate-pulse border border-gray-300 shadow-none"
-                  style={{ borderWidth: "1.5px" }}
+                  className="animate-pulse border border-input shadow-none bg-input/30"
                 >
                   <CardContent className="p-6">
                     <div className="space-y-4">
@@ -592,7 +626,7 @@ export function TokenExplorer() {
               {tokens.map((token, index) => (
                 <Card
                   key={token.mint}
-                  className="border border-gray-300 shadow-none hover:shadow-sm transition-all duration-200"
+                  className="border border-input shadow-none bg-input/30 hover:shadow-sm transition-all duration-200"
                   style={{ borderWidth: "1.5px" }}
                   ref={index === tokens.length - 1 ? lastTokenRef : null}
                   onMouseEnter={() => handleTokenHover(token.mint)}
