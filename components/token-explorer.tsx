@@ -125,6 +125,17 @@ export function TokenExplorer() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [startDate, setStartDate] = useState<Date>()
   const [endDate, setEndDate] = useState<Date>()
+
+  // When startDate changes, if endDate is not set or is in a different month/year, set endDate to same month/year as startDate
+  useEffect(() => {
+    if (startDate) {
+      if (!endDate || endDate.getMonth() !== startDate.getMonth() || endDate.getFullYear() !== startDate.getFullYear()) {
+        // Set endDate to last day of startDate's month
+        const lastDay = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0)
+        setEndDate(lastDay)
+      }
+    }
+  }, [startDate])
   const [minAthMarketCap, setMinAthMarketCap] = useState<string>("")
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
   const [hasMore, setHasMore] = useState(true)
@@ -499,7 +510,13 @@ export function TokenExplorer() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
+                    <Calendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={setEndDate}
+                      initialFocus
+                      month={startDate ? startDate : undefined}
+                    />
                   </PopoverContent>
                 </Popover>
               </div>
