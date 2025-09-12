@@ -122,6 +122,7 @@ interface PumpData {
 }
 
 export function TokenExplorer() {
+  const [searchTerm, setSearchTerm] = useState("");
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const [endDateCalendarMonth, setEndDateCalendarMonth] = useState<Date | undefined>(undefined);
@@ -243,6 +244,14 @@ export function TokenExplorer() {
 
       let query = supabase.from("tokens2").select("mint, name, ticker, createdAt, ath")
 
+      // Apply server-side name/ticker search filter if present
+      if (searchTerm && searchTerm.trim() !== "") {
+        // Escape % and _ in search term for ilike
+        const safeTerm = searchTerm.trim().replace(/[%_]/g, (m) => `\\${m}`);
+        const term = `%${safeTerm}%`;
+        query = query.or(`name.ilike.${term},ticker.ilike.${term}`);
+      }
+
       if (startDate) {
         const startTimestamp = Math.floor(startDate.getTime() / 1000)
         query = query.gte("createdAt", startTimestamp)
@@ -268,7 +277,7 @@ export function TokenExplorer() {
       const { data, error } = await query
 
       if (error) {
-        console.error("Error fetching tokens:", error)
+        console.error("Error fetching tokens:", error, error?.message, error?.details)
         return
       }
 
@@ -285,9 +294,19 @@ export function TokenExplorer() {
       let displayTokens = needsAthFiltering
         ? processedTokens.filter((t) => {
             const v = t.ath as number;
-            return v !== undefined && v !== null && !Number.isNaN(v) && v >= minAthMarketCapNum;
+            const matchesSearch =
+              !searchTerm ||
+              t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              t.ticker.toLowerCase().includes(searchTerm.toLowerCase());
+            return v !== undefined && v !== null && !Number.isNaN(v) && v >= minAthMarketCapNum && matchesSearch;
           })
-        : processedTokens
+        : processedTokens.filter((t) => {
+            const matchesSearch =
+              !searchTerm ||
+              t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              t.ticker.toLowerCase().includes(searchTerm.toLowerCase());
+            return matchesSearch;
+          })
 
       // Track how many raw rows we fetched (for offset) and last batch size (for hasMore)
       let totalFetchedRaw = data.length
@@ -491,7 +510,16 @@ export function TokenExplorer() {
             <CardTitle className="text-2xl font-bold font-sans text-foreground">Filters & Sorting</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 bg-card">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+              <div className="space-y-2">
+                <Label className="font-sans">Search Name / Ticker</Label>
+                <Input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="font-sans text-sm"
+                />
+              </div>
               <div className="space-y-2">
                 <Label className="font-sans">Start Date</Label>
                 <Popover>
